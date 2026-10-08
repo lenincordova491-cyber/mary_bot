@@ -10,13 +10,24 @@ import qrcodeTerminal from 'qrcode-terminal'
 import { AUTH_DIR, PAIRING_NUMBER } from '../config.js'
 
 /**
- * Calcula el retardo de reconexión con backoff exponencial: 1s, 2s, 4s, 8s (tope 8s).
+ * Calcula el retardo de reconexión con backoff exponencial: 5s, 10s, 20s... (tope 60s).
  * @param {number} attempt Número de intento (1-based).
  * @returns {number} Retardo en milisegundos.
  */
 export function getBackoffDelayMs(attempt) {
   const a = Math.max(1, Math.floor(Number(attempt) || 1))
-  return Math.min(1000 * 2 ** (a - 1), 8000)
+  return Math.min(5000 * 2 ** (a - 1), 60000)
+}
+
+/**
+ * Devuelve el retardo de reconexión, o null para cierres que requieren detener el proceso.
+ * @param {number|undefined} statusCode Código de desconexión de Baileys.
+ * @param {number} attempt Número de intento (1-based).
+ * @returns {number|null} Retardo en ms o null cuando no debe reintentarse.
+ */
+export function getReconnectDelayMs(statusCode, attempt) {
+  if (statusCode === DisconnectReason.connectionReplaced) return null
+  return getBackoffDelayMs(attempt)
 }
 
 /**
@@ -24,14 +35,14 @@ export function getBackoffDelayMs(attempt) {
  * - Sesión persistente en AUTH_DIR (useMultiFileAuthState).
  * - Si PAIRING_NUMBER está configurado y no hay sesión registrada, solicita
  *   un código de emparejamiento de 8 dígitos; si no, muestra el QR en terminal.
- * - Reconexión automática con backoff exponencial (1s, 2s, 4s, 8s).
+ * - Reconexión automática con backoff exponencial (desde 5s, tope 60s).
  *
- * @param {{logger?: any, onConnected?: (sock: any) => void}} [options]
+ * @param {{logger?: any, onConnected?: (sock: any) => void, onConnectionReplaced?: (sock: any) => void}} [options]
  * @returns {Promise<any>} Socket de Baileys conectado (o conectándose).
  */
 export async function connectToWhatsApp(options = {}) {
   const logger = options.logger ?? pino({ level: process.env.LOG_LEVEL || 'warn' })
-  const { onConnected } = options
+  const { onConnected, onConnectionReplaced } = options
 
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR)
   const { version } = await fetchLatestBaileysVersion()
@@ -47,6 +58,8 @@ export async function connectToWhatsApp(options = {}) {
     printQRInTerminal: false,
     markOnlineOnConnect: false,
     syncFullHistory: false,
+    generateHighQualityLinkPreview: false,
+    shouldIgnoreJid: (jid) => jid.includes('@lid'),
   })
 
   let reconnections = 0
@@ -85,8 +98,18 @@ export async function connectToWhatsApp(options = {}) {
           console.error('❌ Sesión cerrada (loggedOut). Elimina la carpeta auth_info/ y vuelve a vincular el dispositivo.')
           return
         }
+        const delay = getReconnectDelayMs(statusCode, reconnections + 1)
+        if (delay === null) {
+          const message = 'Otro dispositivo reemplazó esta sesión. Cierra las sesiones antiguas en WhatsApp > Dispositivos vinculados y arranca el bot de nuevo.'
+          logger.warn(message)
+          if (onConnectionReplaced) onConnectionReplaced(sock)
+          else {
+            sock.end(new Error(message))
+            process.exitCode = 0
+          }
+          return
+        }
         reconnections += 1
-        const delay = getBackoffDelayMs(reconnections)
         console.warn(`⚠️ Conexión cerrada (código ${statusCode}). Reconectando en ${delay / 1000}s (intento ${reconnections})…`)
         setTimeout(() => {
           connectToWhatsApp({ ...options, logger }).catch((err) => logger.error({ err }, 'Reconexión fallida'))

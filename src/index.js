@@ -20,9 +20,20 @@ async function main() {
   // URLs sin comando (p. ej. un link de YouTube pegado directo) -> dispatcher universal.
   setUrlDispatcher(({ sock, jid, url, reply }) => dispatchDownload({ sock, jid, url, reply }))
 
+  let sock
+  const shutdown = () => {
+    try {
+      sock?.end(new Error('Cierre manual o conexión reemplazada'))
+    } catch {
+      /* best effort */
+    }
+    process.exit(0)
+  }
+
   let wired = false
-  const sock = await connectToWhatsApp({
+  sock = await connectToWhatsApp({
     logger,
+    onConnectionReplaced: () => shutdown(),
     onConnected: (s) => {
       logger.info('Mary_uwu conectada a WhatsApp ✅')
       if (!wired) {
@@ -34,14 +45,6 @@ async function main() {
     },
   })
 
-  const shutdown = () => {
-    try {
-      sock?.end(new Error('Cierre manual'))
-    } catch {
-      /* best effort */
-    }
-    process.exit(0)
-  }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 }
