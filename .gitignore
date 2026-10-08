@@ -1,0 +1,16 @@
+# Dependencias
+node_modules/
+
+# Entorno y secretos
+.env
+
+# Sesión de WhatsApp (credenciales)
+auth_info/
+
+# Descargas temporales y datos en runtime
+tmp_downloads/
+data/
+
+# Cobertura y logs
+coverage/
+*.log
