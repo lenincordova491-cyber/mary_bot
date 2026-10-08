@@ -12,6 +12,11 @@
 
 **El bot de WhatsApp que descarga, convierte, busca e imagina. Todo en uno. Con cara de gato asustado.**
 
+<video controls muted loop playsinline width="480">
+	<source src="assets/quiet-faith.mp4" type="video/mp4">
+	Tu navegador no admite vídeo HTML5.
+</video>
+
 [Reportar bug](../../issues) · [Pedir feature](../../issues) · [Ver comandos](#-comandos)
 
 </div>
