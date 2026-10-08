@@ -1,4 +1,5 @@
 ---
+<img width="164" height="148" alt="image" src="https://github.com/user-attachments/assets/bfb97263-134d-4b7b-a8df-384fd1d7ea93" />
 
 # 🐱 Mary_uwu
 
